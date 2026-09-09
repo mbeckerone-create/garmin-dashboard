@@ -4,3 +4,5 @@ dist
 .env.local
 .pnpm-store
 tsconfig.tsbuildinfo
+.vercel
+.env*
