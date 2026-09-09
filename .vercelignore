@@ -1,0 +1,7 @@
+.env.local
+node_modules
+dist
+tsconfig.tsbuildinfo
+.pnpm-store
+sources
+AGENTS.md
