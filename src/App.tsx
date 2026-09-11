@@ -4,8 +4,6 @@ import {
   CalendarDays,
   Footprints,
   HeartPulse,
-  LogIn,
-  LogOut,
   RefreshCw,
   Route,
   ShieldCheck,
@@ -51,47 +49,6 @@ function activityIcon(type: string) {
   if (type === "walk") return <Footprints size={18} />;
   if (type === "run") return <Activity size={18} />;
   return <Route size={18} />;
-}
-
-function LoginPanel() {
-  const [email, setEmail] = useState("");
-  const [message, setMessage] = useState("");
-
-  async function sendMagicLink() {
-    if (!supabase || !email) return;
-    const { error } = await supabase.auth.signInWithOtp({
-      email,
-      options: { emailRedirectTo: window.location.origin },
-    });
-    setMessage(error ? error.message : "Check your email for the login link.");
-  }
-
-  return (
-    <section className="login-panel">
-      <div>
-        <p className="eyebrow">Private access</p>
-        <h1>Garmin Dashboard</h1>
-        <p className="muted">
-          Sign in to view your saved Garmin history. Without Supabase keys, this app runs in sample mode.
-        </p>
-      </div>
-      <div className="login-row">
-        <input
-          value={email}
-          onChange={(event) => setEmail(event.target.value)}
-          type="email"
-          inputMode="email"
-          placeholder="Email"
-          aria-label="Email"
-        />
-        <button onClick={sendMagicLink} disabled={!hasSupabaseConfig || !email}>
-          <LogIn size={18} />
-          Send link
-        </button>
-      </div>
-      {message ? <p className="message">{message}</p> : null}
-    </section>
-  );
 }
 
 function mapDailyStat(row: Record<string, unknown>): DailyStat {
@@ -208,7 +165,6 @@ function MetricCard({
 function Dashboard() {
   const [dailyStat, setDailyStat] = useState<DailyStat>(sampleDailyStat);
   const [activities, setActivities] = useState<FitnessActivity[]>(sampleActivities);
-  const [signedIn, setSignedIn] = useState(false);
   const [isLoading, setIsLoading] = useState(hasSupabaseConfig);
   const [dataMessage, setDataMessage] = useState("");
 
@@ -217,18 +173,6 @@ function Dashboard() {
       setIsLoading(false);
       return;
     }
-    supabase.auth.getUser().then(({ data }) => {
-      setSignedIn(Boolean(data.user));
-      setIsLoading(false);
-    });
-    const { data } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSignedIn(Boolean(session?.user));
-    });
-    return () => data.subscription.unsubscribe();
-  }, []);
-
-  useEffect(() => {
-    if (!supabase || !signedIn) return;
 
     async function loadFitnessData() {
       setDataMessage("");
@@ -237,13 +181,13 @@ function Dashboard() {
         await Promise.all([
           supabase!
             .from("daily_stats")
-            .select("*")
+            .select("stat_date, steps, step_goal, total_distance_mi, active_minutes, active_calories, floors, resting_hr, min_hr, max_hr, intensity_minutes, moderate_minutes, vigorous_minutes, sleep_minutes, hrv_ms, stress_avg, synced_at")
             .lte("stat_date", today)
             .order("stat_date", { ascending: false })
             .limit(1),
           supabase!
             .from("activities")
-            .select("*, activity_segments(*)")
+            .select("id, activity_type, title, started_at, distance_mi, duration_seconds, avg_pace_sec_per_mi, avg_hr, activity_segments(id, segment_order, segment_type, label, started_at, distance_mi, duration_seconds, avg_pace_sec_per_mi, avg_hr)")
             .lte("activity_date", today)
             .order("started_at", { ascending: false })
             .limit(5),
@@ -251,6 +195,7 @@ function Dashboard() {
 
       if (statsError || activitiesError) {
         setDataMessage("Live data is not available yet. Showing the sample dashboard.");
+        setIsLoading(false);
         return;
       }
 
@@ -259,10 +204,11 @@ function Dashboard() {
       if (!stats?.[0] && !activityRows?.length) {
         setDataMessage("No Garmin rows found yet. Showing the sample dashboard.");
       }
+      setIsLoading(false);
     }
 
     loadFitnessData();
-  }, [signedIn]);
+  }, []);
 
   const stepPercent = Math.min(100, Math.round((dailyStat.steps / dailyStat.stepGoal) * 100));
   const recordedDistance = useMemo(
@@ -280,19 +226,6 @@ function Dashboard() {
     );
   }
 
-  if (hasSupabaseConfig && !signedIn) {
-    return (
-      <main className="app-shell">
-        <LoginPanel />
-      </main>
-    );
-  }
-
-  async function signOut() {
-    await supabase?.auth.signOut();
-    setSignedIn(false);
-  }
-
   return (
     <main className="app-shell">
       <header className="app-header">
@@ -302,17 +235,11 @@ function Dashboard() {
         </div>
         <div className="header-actions">
           <span className={hasSupabaseConfig ? "status live" : "status sample"}>
-            {hasSupabaseConfig ? "Supabase ready" : "Sample mode"}
+            {hasSupabaseConfig ? "Live data" : "Sample mode"}
           </span>
-          {signedIn ? (
-            <button className="icon-button" onClick={signOut} aria-label="Sign out">
-              <LogOut size={18} />
-            </button>
-          ) : null}
         </div>
       </header>
 
-      {!signedIn ? <LoginPanel /> : null}
       {dataMessage ? <p className="data-message">{dataMessage}</p> : null}
 
       <section className="hero-panel">
