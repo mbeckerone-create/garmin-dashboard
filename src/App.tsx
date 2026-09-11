@@ -221,7 +221,7 @@ function Dashboard() {
     return (
       <main className="app-shell loading-shell">
         <RefreshCw size={22} />
-        <p>Loading private dashboard...</p>
+        <p>Loading dashboard...</p>
       </main>
     );
   }
